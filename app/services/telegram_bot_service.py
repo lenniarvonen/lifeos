@@ -34,17 +34,17 @@ _pending: dict[tuple[int, int], event_extraction.ExtractedEvent] = {}
 
 _CONFIRM_KEYBOARD = {
     "inline_keyboard": [[
-        {"text": "✅ Add", "callback_data": "confirm"},
-        {"text": "❌ Cancel", "callback_data": "cancel"},
+        {"text": "Add", "callback_data": "confirm"},
+        {"text": "Cancel", "callback_data": "cancel"},
     ]]
 }
 
 
 def _format_confirmation(extracted: event_extraction.ExtractedEvent) -> str:
     start_local = extracted.start_at.astimezone(LOCAL_TZ)
-    lines = [f"*{extracted.title}*", f"🕐 {start_local.strftime('%a %d %b · %H:%M')}"]
+    lines = [f"*{extracted.title}*", start_local.strftime("%a %d %b · %H:%M")]
     if extracted.location:
-        lines.append(f"📍 {extracted.location}")
+        lines.append(extracted.location)
     lines.append("\nAdd this to your calendar?")
     return "\n".join(lines)
 
@@ -130,10 +130,10 @@ def _handle_task_command(chat_id: int, text: str) -> None:
         session.close()
 
     if synced:
-        telegram_bot_client.send_message(token, chat_id, f"✅ Added task: {task_title}")
+        telegram_bot_client.send_message(token, chat_id, f"Added task: {task_title}")
     else:
         telegram_bot_client.send_message(
-            token, chat_id, f"⚠️ Saved '{task_title}' locally but Notion sync failed -- check the logs."
+            token, chat_id, f"Saved '{task_title}' locally but Notion sync failed -- check the logs."
         )
 
 
@@ -211,17 +211,17 @@ def _handle_callback_query(callback_query: dict) -> None:
         try:
             event = sync_service.create_bot_event(session, extracted)
             telegram_bot_client.edit_message_text(
-                token, chat_id, message_id, f"✅ Added to *{event.category}*: {event.title}"
+                token, chat_id, message_id, f"Added to *{event.category}*: {event.title}"
             )
         except Exception:  # noqa: BLE001 -- report failure in-chat rather than crash the poll loop
             logger.exception("Failed to create bot event")
             telegram_bot_client.edit_message_text(
-                token, chat_id, message_id, "⚠️ Something went wrong adding that -- check the logs."
+                token, chat_id, message_id, "Something went wrong adding that -- check the logs."
             )
         finally:
             session.close()
     else:
-        telegram_bot_client.edit_message_text(token, chat_id, message_id, "❌ Cancelled")
+        telegram_bot_client.edit_message_text(token, chat_id, message_id, "Cancelled")
 
     telegram_bot_client.answer_callback_query(token, callback_query["id"])
 

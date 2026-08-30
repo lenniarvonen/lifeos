@@ -410,7 +410,7 @@ def run_sync() -> dict:
         fetched_by_source: dict[str, int] = {}
         source_errors: dict[str, str] = {}
 
-        # Primary personal calendar and Founders House calendar are also
+        # Primary personal calendar and the secondary account's calendar are also
         # connected directly in the Notion Calendar app (native Google
         # Calendar sync) for real-time viewing there. They're pulled into
         # Postgres here too, purely to build a complete events dataset for
@@ -444,7 +444,7 @@ def run_sync() -> dict:
                 event.sync_status = "db_only"
             fetched_by_source["google_calendar_founders"] = founders_fetched
         except Exception as exc:  # noqa: BLE001
-            logger.exception("Founders House Google Calendar fetch failed")
+            logger.exception("Secondary Google Calendar fetch failed")
             source_errors["google_calendar_founders"] = str(exc)
 
         if settings.google_work_calendar_id:

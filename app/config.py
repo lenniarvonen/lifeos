@@ -14,11 +14,13 @@ class Settings(BaseSettings):
     exchange_calendar_ical_url: str | None = None
     google_work_calendar_id: str | None = None
 
-    # Founders House: a separate Google login, not just another calendar on the
-    # main account -- shares the same OAuth client (google_client_secret_path)
-    # but needs its own token file since a token is tied to one end-user account.
-    # Calendar itself is connected directly in the Notion Calendar app now, not
-    # pulled through here -- only the mailbox (Gmail) is still synced by us.
+    # A second, separate Google login (e.g. a work/organization account) -- not
+    # just another calendar on the main account. Shares the same OAuth client
+    # (google_client_secret_path) but needs its own token file since a token is
+    # tied to one end-user account. Calendar itself is connected directly in the
+    # Notion Calendar app now, not pulled through here -- only the mailbox
+    # (Gmail) is still synced by us. Its display name/icon come from
+    # channel_display_names/channel_icons under the "gmail_founders" key.
     google_founders_token_path: str = "/run/secrets/google_founders_token.json"
     google_founders_gmail_enabled: bool = False
 
@@ -52,6 +54,22 @@ class Settings(BaseSettings):
     news_feed_urls: str | None = None
 
     sync_interval_minutes: int = 15
+
+    # Telegram channel identifier (or a Gmail account key like "gmail"/
+    # "gmail_founders") -> human-readable display name / a single-character
+    # page icon shown in Notion. Deliberately not shipped with real values --
+    # this is per-deployment personal/organizational data (which channels you
+    # follow, what you call your accounts), not something to hardcode into a
+    # shared template. Unset entries just fall back to the raw channel id and
+    # no icon -- see notion_suggestions.py's _display_name/_channel_icon. Set
+    # as a JSON object string, e.g. CHANNEL_DISPLAY_NAMES={"gmail_founders": "Work Gmail"}.
+    channel_display_names: dict[str, str] = {}
+    channel_icons: dict[str, str] = {}
+
+    @field_validator("channel_display_names", "channel_icons", mode="before")
+    @classmethod
+    def _blank_to_empty_dict(cls, value):
+        return {} if value == "" else value
 
     @field_validator("telegram_api_id", "mycourses_ical_url", "sisu_ical_url", "sisu_helsinki_ical_url", "exchange_calendar_ical_url",
                       "google_work_calendar_id", "telegram_api_hash", "telegram_channels",

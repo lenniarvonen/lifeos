@@ -25,36 +25,6 @@ def _database_id_for(event: CalendarEvent) -> str:
     return settings.notion_database_id
 
 
-# Shared across Assignment pages and Course pages -- tags each with which
-# university it's from, so it's visible at a glance without opening the page.
-_UNIVERSITY_ICONS = {
-    "Aalto": "🅰️",
-    "University of Helsinki": "🏛️",
-}
-
-# Assignment events don't carry a university field directly, only a source
-# ("mycourses_helsinki" is forward-compatible, not wired up yet -- see
-# sync_service.py) -- map that to the same university names Course.university
-# uses, so both page types share one icon table.
-_ASSIGNMENT_SOURCE_UNIVERSITY = {
-    "mycourses": "Aalto",
-    "mycourses_helsinki": "University of Helsinki",
-}
-
-
-def _icon_for(event: CalendarEvent) -> dict | None:
-    if event.category != "Assignments":
-        return None
-    university = _ASSIGNMENT_SOURCE_UNIVERSITY.get(event.source)
-    emoji = _UNIVERSITY_ICONS.get(university) if university else None
-    return {"type": "emoji", "emoji": emoji} if emoji else None
-
-
-def _course_icon_for(course: Course) -> dict | None:
-    emoji = _UNIVERSITY_ICONS.get(course.university)
-    return {"type": "emoji", "emoji": emoji} if emoji else None
-
-
 def _properties_for(event: CalendarEvent) -> dict:
     props: dict = {
         "Title": {"title": [{"text": {"content": event.title}}]},
@@ -94,11 +64,9 @@ def find_page_by_external_id(external_id: str, category: str | None = None) -> s
 
 
 def create_page(event: CalendarEvent) -> str:
-    kwargs = {"parent": {"database_id": _database_id_for(event)}, "properties": _properties_for(event)}
-    icon = _icon_for(event)
-    if icon:
-        kwargs["icon"] = icon
-    page = _client.pages.create(**kwargs)
+    page = _client.pages.create(
+        parent={"database_id": _database_id_for(event)}, properties=_properties_for(event)
+    )
     return page["id"]
 
 
@@ -148,11 +116,9 @@ def _course_properties_for(course: Course) -> dict:
 
 
 def create_course_page(course: Course) -> str:
-    kwargs = {"parent": {"database_id": settings.notion_courses_database_id}, "properties": _course_properties_for(course)}
-    icon = _course_icon_for(course)
-    if icon:
-        kwargs["icon"] = icon
-    page = _client.pages.create(**kwargs)
+    page = _client.pages.create(
+        parent={"database_id": settings.notion_courses_database_id}, properties=_course_properties_for(course)
+    )
     return page["id"]
 
 

@@ -6,48 +6,23 @@ from models import EventSuggestion
 
 _client = Client(auth=settings.notion_token)
 
-# Telegram channel identifier (username or numeric ID, whichever TELEGRAM_CHANNELS
-# uses -- kept as the stable internal key for matching/dedup) -> human-readable
-# display name shown in Notion. Purely cosmetic; the internal `channel` field on
-# EventSuggestion/TelegramSyncState is unaffected.
-CHANNEL_DISPLAY_NAMES = {
-    "aaltorunningclub": "Aalto Running Club",
-    "2471509288": "Prodekon tapahtumat",
-    "1240815471": "AaltoDJ",
-    "3528274345": "Prodekoaktiivit '26",
-    "1153054935": "Aaltoes",
-    "1547083319": "Aalto Investment Club",
-    "prodekotiedotus": "Prodekon tiedotus",
-    "hackjunction": "Junction info channel",
-    "sikajuhlat": "Sikajuhlat",
-    "gmail": "Gmail",
-    "gmail_founders": "Founders House Gmail",
-}
-
-# Same keys as CHANNEL_DISPLAY_NAMES -- used as the page icon so suggestions are
-# visually distinguishable by source channel at a glance in the gallery view.
-CHANNEL_ICONS = {
-    "aaltorunningclub": "🏃",
-    "2471509288": "🎉",
-    "1240815471": "🎧",
-    "3528274345": "🧑‍💼",
-    "1153054935": "🚀",
-    "1547083319": "📈",
-    "prodekotiedotus": "📢",
-    "hackjunction": "💻",
-    "sikajuhlat": "🐷",
-    "gmail": "📧",
-    "gmail_founders": "🏢",
-}
-DEFAULT_CHANNEL_ICON = "💬"
-
 
 def _display_name(channel: str) -> str:
-    return CHANNEL_DISPLAY_NAMES.get(channel, channel)
+    """Telegram channel identifier (username or numeric ID, whichever
+    TELEGRAM_CHANNELS uses -- kept as the stable internal key for matching/
+    dedup) or a Gmail account key ("gmail"/"gmail_founders") -> human-readable
+    display name shown in Notion, from settings.channel_display_names (a
+    per-deployment env setting -- see config.py). Purely cosmetic; the
+    internal `channel` field on EventSuggestion/TelegramSyncState is
+    unaffected. Falls back to the raw channel id if unconfigured."""
+    return settings.channel_display_names.get(channel, channel)
 
 
-def _channel_icon(channel: str) -> str:
-    return CHANNEL_ICONS.get(channel, DEFAULT_CHANNEL_ICON)
+def _channel_icon(channel: str) -> str | None:
+    """Same keys as _display_name, from settings.channel_icons -- used as the
+    page icon so suggestions are visually distinguishable by source channel at
+    a glance in the gallery view. None (no icon set) if unconfigured."""
+    return settings.channel_icons.get(channel)
 
 
 def _properties_for(suggestion: EventSuggestion) -> dict:
@@ -72,11 +47,14 @@ def _properties_for(suggestion: EventSuggestion) -> dict:
 
 
 def create_page(suggestion: EventSuggestion) -> str:
-    page = _client.pages.create(
-        parent={"database_id": settings.notion_suggestions_database_id},
-        icon={"type": "emoji", "emoji": _channel_icon(suggestion.channel)},
-        properties={**_properties_for(suggestion), "Status": {"select": {"name": "Pending"}}},
-    )
+    kwargs = {
+        "parent": {"database_id": settings.notion_suggestions_database_id},
+        "properties": {**_properties_for(suggestion), "Status": {"select": {"name": "Pending"}}},
+    }
+    icon = _channel_icon(suggestion.channel)
+    if icon:
+        kwargs["icon"] = {"type": "emoji", "emoji": icon}
+    page = _client.pages.create(**kwargs)
     return page["id"]
 
 

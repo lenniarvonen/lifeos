@@ -214,7 +214,7 @@ class GmailProcessedMessage(Base):
     every subsequent sync cycle -- this table is what stops that.
 
     `account` scopes message_id per Gmail account ("gmail" for the primary
-    account, "gmail_founders" for the Founders House account, etc.) -- message
+    account, "gmail_founders" for the secondary account, etc.) -- message
     IDs are only unique within a single mailbox, not globally."""
 
     __tablename__ = "gmail_processed_messages"
