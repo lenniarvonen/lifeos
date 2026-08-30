@@ -1,0 +1,8 @@
+.env
+secrets/
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+postgres-data/

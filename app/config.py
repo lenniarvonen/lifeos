@@ -1,0 +1,78 @@
+from pydantic import field_validator
+from pydantic_settings import BaseSettings
+
+
+class Settings(BaseSettings):
+    database_url: str
+    notion_token: str
+    notion_database_id: str
+    google_client_secret_path: str = "/run/secrets/google_client_secret.json"
+    google_token_path: str = "/run/secrets/google_token.json"
+    mycourses_ical_url: str | None = None
+    sisu_ical_url: str | None = None
+    sisu_helsinki_ical_url: str | None = None
+    exchange_calendar_ical_url: str | None = None
+    google_work_calendar_id: str | None = None
+
+    # Founders House: a separate Google login, not just another calendar on the
+    # main account -- shares the same OAuth client (google_client_secret_path)
+    # but needs its own token file since a token is tied to one end-user account.
+    # Calendar itself is connected directly in the Notion Calendar app now, not
+    # pulled through here -- only the mailbox (Gmail) is still synced by us.
+    google_founders_token_path: str = "/run/secrets/google_founders_token.json"
+    google_founders_gmail_enabled: bool = False
+
+    telegram_api_id: int | None = None
+    telegram_api_hash: str | None = None
+    telegram_session_path: str = "/run/secrets/telegram"
+    telegram_channels: str | None = None
+
+    telegram_bot_token: str | None = None
+    telegram_bot_allowed_user_id: int | None = None
+
+    anthropic_api_key: str | None = None
+    notion_suggestions_database_id: str | None = None
+
+    gmail_suggestions_enabled: bool = False
+
+    notion_digest_page_id: str | None = None
+    notion_personal_emails_database_id: str | None = None
+
+    notion_classes_database_id: str | None = None
+    notion_classes_helsinki_database_id: str | None = None
+    notion_assignments_database_id: str | None = None
+    notion_freetime_database_id: str | None = None
+    notion_meetings_database_id: str | None = None
+    notion_work_database_id: str | None = None
+    notion_workouts_database_id: str | None = None
+    notion_courses_database_id: str | None = None
+    notion_tasks_database_id: str | None = None
+    notion_replies_database_id: str | None = None
+
+    news_feed_urls: str | None = None
+
+    sync_interval_minutes: int = 15
+
+    @field_validator("telegram_api_id", "mycourses_ical_url", "sisu_ical_url", "sisu_helsinki_ical_url", "exchange_calendar_ical_url",
+                      "google_work_calendar_id", "telegram_api_hash", "telegram_channels",
+                      "telegram_bot_token", "telegram_bot_allowed_user_id",
+                      "anthropic_api_key", "notion_suggestions_database_id", "notion_digest_page_id",
+                      "notion_personal_emails_database_id", "notion_classes_database_id", "notion_classes_helsinki_database_id",
+                      "notion_assignments_database_id", "notion_freetime_database_id", "notion_meetings_database_id",
+                      "notion_work_database_id", "notion_workouts_database_id", "notion_courses_database_id",
+                      "notion_tasks_database_id", "notion_replies_database_id", "news_feed_urls", mode="before")
+    @classmethod
+    def _blank_to_none(cls, value):
+        return None if value == "" else value
+
+    @field_validator("gmail_suggestions_enabled", "google_founders_gmail_enabled", mode="before")
+    @classmethod
+    def _blank_to_false(cls, value):
+        return False if value == "" else value
+
+    class Config:
+        env_file = ".env"
+        case_sensitive = False
+
+
+settings = Settings()
