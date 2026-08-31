@@ -76,8 +76,18 @@ def _upsert_postgres(
         if event.is_deleted and existing is None:
             continue  # never synced, nothing to do
 
-        if existing and existing.source_etag == event.etag and not event.is_deleted:
+        if (
+            existing
+            and existing.source_etag == event.etag
+            and not event.is_deleted
+            and not existing.is_deleted
+        ):
             continue  # unchanged since last sync, skip
+        # A row locally marked deleted (e.g. by _mark_dropped_from_window_as_deleted
+        # during a flaky partial feed) but still present in the feed must NOT take
+        # the skip above even when its content is byte-identical -- it has to fall
+        # through so the branch below can clear is_deleted. The etag-only skip
+        # otherwise leaves it tombstoned forever with no path back.
 
         if existing is None:
             existing = CalendarEvent(source=source, external_id=event.external_id)
