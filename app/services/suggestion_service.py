@@ -255,15 +255,27 @@ def process_reviewed() -> dict:
                         is_deleted=False,
                     )
                 )
-                suggestion.status = "accepted"
-                accepted += 1
+                new_status = "accepted"
             elif status_value == "Declined":
-                suggestion.status = "declined"
-                declined += 1
+                new_status = "declined"
             else:
                 continue
 
-            notion_suggestions.archive_page(suggestion.notion_page_id)
+            try:
+                notion_suggestions.archive_page(suggestion.notion_page_id)
+            except Exception:  # noqa: BLE001 -- one bad page shouldn't roll back every other reviewed
+                # suggestion in this batch (previously an unhandled exception here aborted the whole
+                # process_reviewed() call, undoing every accept/decline already processed in the same
+                # run). Left "pending" so it's retried next sync -- safe to retry since an accepted
+                # promotion is idempotent (matched by external_id/etag in _upsert_postgres).
+                logger.exception("Failed to archive suggestion page %s", suggestion.notion_page_id)
+                continue
+
+            suggestion.status = new_status
+            if new_status == "accepted":
+                accepted += 1
+            else:
+                declined += 1
 
         all_touched = []
         for source, events in promoted_by_source.items():

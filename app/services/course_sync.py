@@ -156,8 +156,14 @@ def match_assignments_to_courses(session) -> int:
 
     matched = 0
     for event in unmatched:
-        haystack = f"{event.title} {event.description or ''}"
-        candidates = [c for c in courses if c.code in haystack]
+        # Preferred: exact match on the code parsed off the raw title suffix
+        # (see sync_service._split_course_details). Fallback for rows that
+        # predate that column: substring-scan the title/description.
+        if event.course_code:
+            candidates = [c for c in courses if c.code == event.course_code]
+        else:
+            haystack = f"{event.title} {event.description or ''}"
+            candidates = [c for c in courses if c.code in haystack]
         if not candidates:
             continue
         # Prefer the course whose period actually contains the assignment's date;

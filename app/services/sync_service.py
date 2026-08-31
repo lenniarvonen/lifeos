@@ -90,6 +90,8 @@ def _upsert_postgres(
             existing.title = event.title
             existing.description = event.description
             existing.location = event.location
+            if event.course_code is not None:
+                existing.course_code = event.course_code
             # Category is sticky: only assigned the first time an event is ever
             # categorized. Never recomputed afterward, even if the source event's
             # content changes later -- so a manual move to a different category
@@ -210,14 +212,21 @@ _MYCOURSES_OPENS_PATTERN = re.compile(r"\bopens\b", re.IGNORECASE)
 # Moodle appends to assignment titles (e.g. "coding test closes / CS-C3240 -
 # Machine Learning, Lecture, 1.9.2025-10.10.2025" -> "coding test closes") --
 # redundant now that the assignment is linked to its course via a relation
-# (see course_sync.py), same suffix shape course_sync.py parses out.
+# (see course_sync.py), same suffix shape course_sync.py parses out. The course
+# code is captured so _split_course_details can keep it after stripping -- it's
+# the only place the code appears, so course_sync would otherwise have nothing
+# to match the assignment to its Course row on.
 _MYCOURSES_COURSE_SUFFIX_PATTERN = re.compile(
-    rf"\s*/\s*{COURSE_CODE_PATTERN}\s*-\s*.+?,\s*[^,]+,\s*\d{{1,2}}\.\d{{1,2}}\.\d{{4}}-\d{{1,2}}\.\d{{1,2}}\.\d{{4}}\s*$"
+    rf"\s*/\s*(?P<code>{COURSE_CODE_PATTERN})\s*-\s*.+?,\s*[^,]+,\s*\d{{1,2}}\.\d{{1,2}}\.\d{{4}}-\d{{1,2}}\.\d{{1,2}}\.\d{{4}}\s*$"
 )
 
 
-def _strip_course_details(title: str) -> str:
-    return _MYCOURSES_COURSE_SUFFIX_PATTERN.sub("", title).strip()
+def _split_course_details(title: str) -> tuple[str, str | None]:
+    """(title without the "<CODE> - <Name>, <type>, <dates>" suffix, the CODE) --
+    code is None when the title carries no such suffix."""
+    match = _MYCOURSES_COURSE_SUFFIX_PATTERN.search(title)
+    stripped = _MYCOURSES_COURSE_SUFFIX_PATTERN.sub("", title).strip()
+    return stripped, (match.group("code") if match else None)
 
 
 def _sync_mycourses(session) -> tuple[list[CalendarEvent], int]:
@@ -230,8 +239,27 @@ def _sync_mycourses(session) -> tuple[list[CalendarEvent], int]:
     # Moodle exports each assignment as an "X opens"/"X closes" pair -- only the
     # closing (deadline) event is wanted, not the opening announcement.
     deadlines = [e for e in deadlines if not _MYCOURSES_OPENS_PATTERN.search(e.title)]
-    deadlines = [dataclasses.replace(e, title=_strip_course_details(e.title)) for e in deadlines]
+    split = []
+    for e in deadlines:
+        stripped, code = _split_course_details(e.title)
+        split.append(dataclasses.replace(e, title=stripped, course_code=code))
+    deadlines = split
     touched = _upsert_postgres(session, deadlines, "mycourses", "mycourses")
+    # course_code is derived from the title suffix, which _strip drops without
+    # changing the content etag -- so a row stored before this parsing existed
+    # (or before its course code could be read) is skipped by _upsert_postgres's
+    # etag check and never gets it. Backfill it directly, independent of etag.
+    codes_by_ext = {e.external_id: e.course_code for e in deadlines if e.course_code}
+    if codes_by_ext:
+        for row in session.scalars(
+            select(CalendarEvent).where(
+                CalendarEvent.source == "mycourses",
+                CalendarEvent.external_id.in_(list(codes_by_ext)),
+            )
+        ):
+            if row.course_code != codes_by_ext[row.external_id]:
+                row.course_code = codes_by_ext[row.external_id]
+        session.flush()
     # Membership is checked against the raw (pre-filter) feed, not `deadlines`:
     # a previously-stored mycourses row's external_id always came from an event
     # that passed the filter at creation time, so checking it against the full

@@ -15,3 +15,6 @@ class NormalizedEvent:
     etag: str | None
     source_updated_at: datetime | None
     is_deleted: bool
+    # Only populated by _sync_mycourses for Assignment deadlines -- the course code
+    # lifted off the raw title before its verbose suffix is stripped.
+    course_code: str | None = None

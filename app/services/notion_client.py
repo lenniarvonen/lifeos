@@ -1,4 +1,5 @@
 """Thin wrapper around the Notion API for the calendar-mirror database."""
+import zoneinfo
 from datetime import datetime
 
 from notion_client import Client
@@ -7,6 +8,8 @@ from config import settings
 from models import CalendarEvent, Course, Task, TelegramPendingReply
 
 _client = Client(auth=settings.notion_token)
+
+LOCAL_TZ = zoneinfo.ZoneInfo("Europe/Helsinki")
 
 CATEGORY_DATABASES = {
     "Classes": settings.notion_classes_database_id,
@@ -48,7 +51,16 @@ def _properties_for(event: CalendarEvent) -> dict:
     if event.category == "Assignments" and event.assignment_status:
         props["Status"] = {"select": {"name": event.assignment_status}}
     if event.category == "Assignments" and event.short_title:
-        props["Short Title"] = {"rich_text": [{"text": {"content": event.short_title}}]}
+        # "<compressed title> — <deadline>", e.g. "Assignment 1 — Sep 6", so the
+        # assignments table shows the due date without the reader opening the card
+        # or widening it to the Start column. short_title itself stays the pure
+        # compressed form in Postgres; the date is stitched on at write time so
+        # it stays current whenever the page is repushed, without short_title
+        # needing to be regenerated.
+        deadline = event.start_at.astimezone(LOCAL_TZ).strftime("%b %-d")
+        props["Short Title"] = {
+            "rich_text": [{"text": {"content": f"{event.short_title} — {deadline}"}}]
+        }
     return props
 
 

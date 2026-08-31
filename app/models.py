@@ -91,6 +91,13 @@ class CalendarEvent(Base):
     course_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=True)
     course: Mapped["Course | None"] = relationship("Course")
 
+    # Only set for source == "mycourses" Assignment events. The course code parsed
+    # out of the raw MyCourses title suffix before the verbose suffix is dropped
+    # (see sync_service._split_course_details) -- kept so course_sync can match the
+    # assignment to its Course row by exact code even though the code no longer
+    # appears anywhere in `title` or `description`.
+    course_code: Mapped[str | None] = mapped_column(String, nullable=True)
+
     # Only meaningful for category == "Assignments". "Upcoming"/"Due soon"/"Overdue"
     # are auto-computed from the due date on every sync; "In progress"/"Done" are
     # set by the user in Notion and never overwritten once set -- see
