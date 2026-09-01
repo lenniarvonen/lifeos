@@ -11,6 +11,11 @@ class Settings(BaseSettings):
     mycourses_ical_url: str | None = None
     sisu_ical_url: str | None = None
     sisu_helsinki_ical_url: str | None = None
+    # DigiCampus (digicampus.fi) Moodle calendar export URL -- University of
+    # Helsinki course assignment deadlines. The URL embeds a personal Moodle
+    # authtoken; it's per-deployment personal data, kept in .env like the other
+    # ical feed URLs. See services/digicampus_client.py.
+    digicampus_ical_url: str | None = None
     exchange_calendar_ical_url: str | None = None
     google_work_calendar_id: str | None = None
 
@@ -80,7 +85,8 @@ class Settings(BaseSettings):
     def _blank_to_empty_dict(cls, value):
         return {} if value == "" else value
 
-    @field_validator("telegram_api_id", "mycourses_ical_url", "sisu_ical_url", "sisu_helsinki_ical_url", "exchange_calendar_ical_url",
+    @field_validator("telegram_api_id", "mycourses_ical_url", "sisu_ical_url", "sisu_helsinki_ical_url",
+                      "digicampus_ical_url", "exchange_calendar_ical_url",
                       "google_work_calendar_id", "telegram_api_hash", "telegram_channels",
                       "telegram_bot_token", "telegram_bot_allowed_user_id",
                       "anthropic_api_key", "notion_suggestions_database_id", "notion_digest_page_id",

@@ -10,7 +10,14 @@ from sqlalchemy import select
 from config import settings
 from db import SessionLocal
 from models import CalendarEvent
-from services import aplus_client, event_extraction, google_calendar, ical_calendar, notion_client
+from services import (
+    aplus_client,
+    digicampus_client,
+    event_extraction,
+    google_calendar,
+    ical_calendar,
+    notion_client,
+)
 from services.course_sync import COURSE_CODE_PATTERN
 from services.types import NormalizedEvent
 
@@ -45,7 +52,7 @@ def _compute_assignment_status(due_at: dt.datetime, now: dt.datetime) -> str:
 
 
 def _assign_category(source: str, title: str, description: str | None) -> str | None:
-    if source in ("mycourses", "aplus"):
+    if source in ("mycourses", "aplus", "digicampus"):
         return "Assignments"
     if source == "sisu":
         return "Classes"
@@ -128,7 +135,12 @@ def _upsert_postgres(
 
 
 def _mark_dropped_from_window_as_deleted(
-    session, source: str, live_external_ids: set[str]
+    session,
+    source: str,
+    live_external_ids: set[str],
+    *,
+    past_days: int | None = None,
+    future_days: int | None = None,
 ) -> list[CalendarEvent]:
     """ical_calendar.fetch_events only covers a rolling window (see its
     FETCH_WINDOW_*_DAYS), so an event's absence from one fetch doesn't
@@ -140,13 +152,21 @@ def _mark_dropped_from_window_as_deleted(
     (e.g. a dropped exercise session), and Postgres/Notion should reflect
     that instead of keeping a stale entry around forever. Skipped entirely
     if the feed came back empty, so a transient empty response can't wipe
-    out everything."""
+    out everything.
+
+    past_days/future_days default to ical_calendar's window but are overridable
+    for a source whose feed covers a different span -- DigiCampus's export only
+    reaches ~60 days ahead, so it passes its own narrower bounds rather than
+    tombstoning every deadline 45-180 days out that just isn't in the feed yet."""
     if not live_external_ids:
         return []
 
+    past_days = ical_calendar.FETCH_WINDOW_PAST_DAYS if past_days is None else past_days
+    future_days = ical_calendar.FETCH_WINDOW_FUTURE_DAYS if future_days is None else future_days
+
     now = dt.datetime.now(dt.timezone.utc)
-    safe_start = now - dt.timedelta(days=ical_calendar.FETCH_WINDOW_PAST_DAYS - 1)
-    safe_end = now + dt.timedelta(days=ical_calendar.FETCH_WINDOW_FUTURE_DAYS - 1)
+    safe_start = now - dt.timedelta(days=past_days - 1)
+    safe_end = now + dt.timedelta(days=future_days - 1)
 
     stale = session.scalars(
         select(CalendarEvent).where(
@@ -294,6 +314,28 @@ def _sync_aplus(session) -> tuple[list[CalendarEvent], int]:
     )
     touched = _upsert_postgres(session, normalized, "aplus", "aplus")
     touched += _mark_dropped_from_window_as_deleted(session, "aplus", {e.external_id for e in normalized})
+    return touched, len(normalized)
+
+
+def _sync_digicampus(session) -> tuple[list[CalendarEvent], int]:
+    """DigiCampus (digicampus.fi Moodle) assignment deadlines -> Assignments,
+    same shape as _sync_aplus. digicampus_client already filters the feed's
+    open/close event pairs down to genuine deadlines and clips to its own
+    window, which is narrower than the other ical feeds' because the DigiCampus
+    export horizon is only ~60 days -- so _mark_dropped_from_window_as_deleted is
+    handed those same bounds, otherwise a deadline that just hasn't entered the
+    feed yet would be tombstoned on every run. course_code is set off CATEGORIES
+    and folded into the etag, so no separate backfill pass is needed (cf.
+    _sync_mycourses)."""
+    normalized = digicampus_client.fetch_events(settings.digicampus_ical_url)
+    touched = _upsert_postgres(session, normalized, "digicampus", "digicampus")
+    touched += _mark_dropped_from_window_as_deleted(
+        session,
+        "digicampus",
+        {e.external_id for e in normalized},
+        past_days=digicampus_client.FETCH_WINDOW_PAST_DAYS,
+        future_days=digicampus_client.FETCH_WINDOW_FUTURE_DAYS,
+    )
     return touched, len(normalized)
 
 
@@ -532,6 +574,15 @@ def run_sync() -> dict:
             except Exception as exc:  # noqa: BLE001
                 logger.exception("A+ fetch failed")
                 source_errors["aplus"] = str(exc)
+
+        if settings.digicampus_ical_url:
+            try:
+                digicampus_touched, digicampus_fetched = _sync_digicampus(session)
+                all_touched.extend(digicampus_touched)
+                fetched_by_source["digicampus"] = digicampus_fetched
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("DigiCampus fetch failed")
+                source_errors["digicampus"] = str(exc)
 
         if settings.sisu_ical_url:
             try:

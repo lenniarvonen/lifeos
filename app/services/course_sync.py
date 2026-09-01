@@ -130,11 +130,13 @@ def sync_courses(session, ical_url: str, university: str) -> dict:
 
 
 def match_assignments_to_courses(session) -> int:
-    """Best-effort: link unmatched MyCourses/A+ Assignment events to a course by
-    course code -- an exact match on event.course_code when set (A+ always sets
-    it; MyCourses sets it from the title suffix), otherwise a substring scan of
-    the title/description. See module docstring -- unverified against real
-    MyCourses deadline data.
+    """Best-effort: link unmatched MyCourses/A+/DigiCampus Assignment events to a
+    course by course code -- an exact match on event.course_code when set (A+
+    always sets it; MyCourses from the title suffix; DigiCampus off CATEGORIES),
+    otherwise a substring scan of the title/description. See module docstring --
+    unverified against real MyCourses deadline data. Nothing derives Helsinki
+    (DigiCampus) courses yet, so those link only if a Course row for the code
+    happens to exist already.
 
     Pushes the new Course relation to Notion immediately (rather than just
     setting course_id and waiting for some other sync step to touch the
@@ -149,7 +151,7 @@ def match_assignments_to_courses(session) -> int:
 
     unmatched = session.scalars(
         select(CalendarEvent).where(
-            CalendarEvent.source.in_(("mycourses", "aplus")),
+            CalendarEvent.source.in_(("mycourses", "aplus", "digicampus")),
             CalendarEvent.category == "Assignments",
             CalendarEvent.course_id.is_(None),
             CalendarEvent.is_deleted.is_(False),

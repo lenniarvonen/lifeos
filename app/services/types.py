@@ -15,6 +15,7 @@ class NormalizedEvent:
     etag: str | None
     source_updated_at: datetime | None
     is_deleted: bool
-    # Only populated by _sync_mycourses for Assignment deadlines -- the course code
-    # lifted off the raw title before its verbose suffix is stripped.
+    # Populated for Assignment deadlines by _sync_mycourses (course code lifted
+    # off the raw title suffix), aplus_client (from the API), and digicampus_client
+    # (from the ical CATEGORIES field).
     course_code: str | None = None

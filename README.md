@@ -34,7 +34,12 @@ Personal data-fusion system. This slice: one-way sync of Google Calendar events 
    - Set `APLUS_ENABLED=true` in `.env`.
    - Deadlines are pulled at the course-module level for every course A+ reports you're enrolled in, and mirrored into the Assignments database (auto-linked to a Course row when the code matches one from MyCourses).
 
-6. **Environment**
+6. **DigiCampus (optional, University of Helsinki assignment deadlines)**
+   - In DigiCampus (https://digicampus.fi) go to Calendar → Export, pick "Events related to courses" and "Recent and next 60 days", and copy the calendar URL (it carries a personal `authtoken`).
+   - Put it into `.env` as `DIGICAMPUS_ICAL_URL`.
+   - Moodle exports each assignment as several timed events (submission opens/closes, peer-review opens, grading period ends); only genuine cut-offs are kept, matched by Finnish deadline wording, and mirrored into the Assignments database. The feed only carries the course shortname (no name), so these link to a Course row only if one already exists for that code.
+
+7. **Environment**
    ```bash
    cp .env.example .env   # already done if you're reading this after initial scaffolding
    ```

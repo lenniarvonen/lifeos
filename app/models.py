@@ -86,16 +86,17 @@ class CalendarEvent(Base):
     location: Mapped[str | None] = mapped_column(String, nullable=True)
     category: Mapped[str | None] = mapped_column(String, nullable=True)
 
-    # Only set for source == "mycourses" Assignment events matched to a course by
-    # code (see course_sync.py) -- drives the Notion relation to the Courses db.
+    # Only set for Assignment events (mycourses/aplus/digicampus) matched to a
+    # course by code (see course_sync.py) -- drives the Notion relation to the
+    # Courses db.
     course_id: Mapped[uuid.UUID | None] = mapped_column(UUID(as_uuid=True), ForeignKey("courses.id"), nullable=True)
     course: Mapped["Course | None"] = relationship("Course")
 
-    # Only set for source == "mycourses" Assignment events. The course code parsed
-    # out of the raw MyCourses title suffix before the verbose suffix is dropped
-    # (see sync_service._split_course_details) -- kept so course_sync can match the
-    # assignment to its Course row by exact code even though the code no longer
-    # appears anywhere in `title` or `description`.
+    # Set for Assignment events: parsed out of the raw MyCourses title suffix
+    # (see sync_service._split_course_details), or supplied by aplus_client /
+    # digicampus_client. Kept so course_sync can match the assignment to its
+    # Course row by exact code even when the code doesn't appear in `title` or
+    # `description`.
     course_code: Mapped[str | None] = mapped_column(String, nullable=True)
 
     # Only meaningful for category == "Assignments". "Upcoming"/"Due soon"/"Overdue"
