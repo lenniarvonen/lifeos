@@ -28,7 +28,13 @@ Personal data-fusion system. This slice: one-way sync of Google Calendar events 
    - Share/connect the database with your integration.
    - Put the token and database ID into `.env` as `NOTION_TOKEN` and `NOTION_DATABASE_ID`.
 
-5. **Environment**
+5. **A+ (optional, plus.cs.aalto.fi assignment deadlines)**
+   - Grab your personal API token from https://plus.cs.aalto.fi/accounts/accounts/ (the "API token" field — a single hex string).
+   - Save it as plain text in `secrets/aplus_token` (no `Token ` prefix, no newline needed).
+   - Set `APLUS_ENABLED=true` in `.env`.
+   - Deadlines are pulled at the course-module level for every course A+ reports you're enrolled in, and mirrored into the Assignments database (auto-linked to a Course row when the code matches one from MyCourses).
+
+6. **Environment**
    ```bash
    cp .env.example .env   # already done if you're reading this after initial scaffolding
    ```

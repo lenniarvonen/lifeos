@@ -10,7 +10,7 @@ from sqlalchemy import select
 from config import settings
 from db import SessionLocal
 from models import CalendarEvent
-from services import event_extraction, google_calendar, ical_calendar, notion_client
+from services import aplus_client, event_extraction, google_calendar, ical_calendar, notion_client
 from services.course_sync import COURSE_CODE_PATTERN
 from services.types import NormalizedEvent
 
@@ -45,7 +45,7 @@ def _compute_assignment_status(due_at: dt.datetime, now: dt.datetime) -> str:
 
 
 def _assign_category(source: str, title: str, description: str | None) -> str | None:
-    if source == "mycourses":
+    if source in ("mycourses", "aplus"):
         return "Assignments"
     if source == "sisu":
         return "Classes"
@@ -278,6 +278,25 @@ def _sync_mycourses(session) -> tuple[list[CalendarEvent], int]:
     return touched, len(deadlines)
 
 
+def _sync_aplus(session) -> tuple[list[CalendarEvent], int]:
+    """A+ module deadlines -> Assignments, same shape as _sync_mycourses. Unlike
+    the MyCourses ical feed, A+ is queried per enrolled course and returns every
+    module regardless of date, so aplus_client already clips to the ical fetch
+    window -- meaning _mark_dropped_from_window_as_deleted's window bounds line
+    up and a module that genuinely disappears from A+ gets tombstoned. course_code
+    is set on every event by aplus_client and folded into the etag, so no
+    separate backfill pass is needed (cf. _sync_mycourses)."""
+    normalized = aplus_client.fetch_events(
+        settings.aplus_api_token_path,
+        settings.aplus_api_base_url,
+        ical_calendar.FETCH_WINDOW_PAST_DAYS,
+        ical_calendar.FETCH_WINDOW_FUTURE_DAYS,
+    )
+    touched = _upsert_postgres(session, normalized, "aplus", "aplus")
+    touched += _mark_dropped_from_window_as_deleted(session, "aplus", {e.external_id for e in normalized})
+    return touched, len(normalized)
+
+
 def _sync_sisu(session, ical_url: str | None = None, source: str = "sisu") -> tuple[list[CalendarEvent], int]:
     normalized = ical_calendar.fetch_events(ical_url or settings.sisu_ical_url)
     touched = _upsert_postgres(session, normalized, source, source)
@@ -504,6 +523,15 @@ def run_sync() -> dict:
             except Exception as exc:  # noqa: BLE001
                 logger.exception("MyCourses fetch failed")
                 source_errors["mycourses"] = str(exc)
+
+        if settings.aplus_enabled:
+            try:
+                aplus_touched, aplus_fetched = _sync_aplus(session)
+                all_touched.extend(aplus_touched)
+                fetched_by_source["aplus"] = aplus_fetched
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("A+ fetch failed")
+                source_errors["aplus"] = str(exc)
 
         if settings.sisu_ical_url:
             try:

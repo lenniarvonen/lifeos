@@ -130,9 +130,11 @@ def sync_courses(session, ical_url: str, university: str) -> dict:
 
 
 def match_assignments_to_courses(session) -> int:
-    """Best-effort: link unmatched MyCourses Assignment events to a course by
-    checking whether the course's code appears in the assignment's title or
-    description. See module docstring -- unverified against real deadline data.
+    """Best-effort: link unmatched MyCourses/A+ Assignment events to a course by
+    course code -- an exact match on event.course_code when set (A+ always sets
+    it; MyCourses sets it from the title suffix), otherwise a substring scan of
+    the title/description. See module docstring -- unverified against real
+    MyCourses deadline data.
 
     Pushes the new Course relation to Notion immediately (rather than just
     setting course_id and waiting for some other sync step to touch the
@@ -147,7 +149,7 @@ def match_assignments_to_courses(session) -> int:
 
     unmatched = session.scalars(
         select(CalendarEvent).where(
-            CalendarEvent.source == "mycourses",
+            CalendarEvent.source.in_(("mycourses", "aplus")),
             CalendarEvent.category == "Assignments",
             CalendarEvent.course_id.is_(None),
             CalendarEvent.is_deleted.is_(False),
@@ -156,9 +158,9 @@ def match_assignments_to_courses(session) -> int:
 
     matched = 0
     for event in unmatched:
-        # Preferred: exact match on the code parsed off the raw title suffix
-        # (see sync_service._split_course_details). Fallback for rows that
-        # predate that column: substring-scan the title/description.
+        # Preferred: exact match on event.course_code (A+ from the API; MyCourses
+        # parsed off the raw title suffix, see sync_service._split_course_details).
+        # Fallback for MyCourses rows that predate that column: substring-scan.
         if event.course_code:
             candidates = [c for c in courses if c.code == event.course_code]
         else:

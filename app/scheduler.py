@@ -123,7 +123,7 @@ def start() -> None:
             minutes=settings.sync_interval_minutes,
             id="duration_checkin",
         )
-    if settings.mycourses_ical_url and settings.notion_courses_database_id:
+    if (settings.mycourses_ical_url or settings.aplus_enabled) and settings.notion_courses_database_id:
         scheduler.add_job(
             _run_course_sync_job,
             "interval",

@@ -14,6 +14,15 @@ class Settings(BaseSettings):
     exchange_calendar_ical_url: str | None = None
     google_work_calendar_id: str | None = None
 
+    # A+ (plus.cs.aalto.fi) assignment-deadline source. Pulls module-level
+    # closing times for every course the token owner is enrolled in (discovered
+    # via /users/me/), mirrored as Assignments the same way MyCourses deadlines
+    # are. The token is a personal API token from the A+ profile page, mounted
+    # as a Docker secret file rather than kept in .env.
+    aplus_enabled: bool = False
+    aplus_api_token_path: str = "/run/secrets/aplus_token"
+    aplus_api_base_url: str = "https://plus.cs.aalto.fi/api/v2/"
+
     # A second, separate Google login (e.g. a work/organization account) -- not
     # just another calendar on the main account. Shares the same OAuth client
     # (google_client_secret_path) but needs its own token file since a token is
@@ -83,7 +92,7 @@ class Settings(BaseSettings):
     def _blank_to_none(cls, value):
         return None if value == "" else value
 
-    @field_validator("gmail_suggestions_enabled", "google_founders_gmail_enabled", mode="before")
+    @field_validator("gmail_suggestions_enabled", "google_founders_gmail_enabled", "aplus_enabled", mode="before")
     @classmethod
     def _blank_to_false(cls, value):
         return False if value == "" else value
